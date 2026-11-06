@@ -333,7 +333,7 @@ public partial class App : Application
 
     private void CheckUpdate()
     {
-        if (SettingHelper.Get("DisableAutoUpdateCheck", false))
+        if (!Updater.AutomaticUpdateChecksEnabled)
             return;
 
         if (DateTime.Now.Ticks - SettingHelper.Get<long>("LastUpdateTicks") < TimeSpan.FromDays(30).Ticks)

@@ -492,6 +492,7 @@ Step 5️⃣  🎉 Magic happens!
 |-----|--------|
 | <kbd>Wheel</kbd> | Zoom ordinary images; scroll in long-image reading mode |
 | <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> | Zoom PDFs and images in long-image reading mode |
+| Double-click image | In long-image reading mode, toggle whole-image overview and width-fit reading; double-click a position in the overview to center it vertically when zooming in |
 | <kbd>L-Click Drag</kbd> | Rotate 3D |
 | <kbd>M-Click Drag</kbd> | Pan 3D |
 

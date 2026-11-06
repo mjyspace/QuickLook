@@ -23,6 +23,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -30,12 +31,29 @@ namespace QuickLook.Helpers;
 
 internal class Updater
 {
+    internal static bool AutomaticUpdateChecksEnabled => !SettingHelper.Get("DisableAutoUpdateCheck",
+        IsLocalBuildVersion(Assembly.GetExecutingAssembly()
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion));
+
+    internal static bool IsLocalBuildVersion(string version)
+    {
+        // Scripts/Get-BuildVersion.ps1 marks local builds with the commit in
+        // informational metadata, including builds based on an upstream tag.
+        // Official portable packages must not be identified by portable.lock,
+        // and a local build's numeric AssemblyVersion alone is insufficient.
+        return version != null && Regex.IsMatch(version,
+            @"^\d+\.\d+\.\d+(?:\.\d+)?\+g[0-9a-f]{12}(?:-dirty)?$", RegexOptions.IgnoreCase);
+    }
+
     // "silent" indicates whether this check was automatic/background.
     // When "silent" is true, do not open or invoke UI that shows
     // the full markdown release notes. Only show detailed release
     // notes when the check is user-initiated (silent == false).
     public static void CheckForUpdates(bool silent = false)
     {
+        if (silent && !AutomaticUpdateChecksEnabled)
+            return;
+
         if (App.IsUWP)
         {
             if (!silent)

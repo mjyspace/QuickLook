@@ -465,6 +465,11 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
 
     private void ViewPanel_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        // A reading-mode double click changes the layout; do not start a drag
+        // with offsets from before that change.
+        if (_imageReadingActive && e.ClickCount > 1)
+            return;
+
         e.MouseDevice.Capture(viewPanel);
 
         _dragInitPos = e.GetPosition(viewPanel);
@@ -475,6 +480,15 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
 
     private void ViewPanel_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        if (e.ChangedButton == MouseButton.Left && ToggleImageReadingFit(e.GetPosition(viewPanelImage)))
+        {
+            _dragInitPos = null;
+            if (viewPanel.IsMouseCaptured)
+                e.MouseDevice.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         DoZoomToFit();
     }
 

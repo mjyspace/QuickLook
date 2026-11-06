@@ -41,6 +41,7 @@ public partial class ImagePanel
     private ImageFitMode _imageFitMode;
     private Size _lastImageSourceSize = Size.Empty;
     private Point? _imageSourceAnchor;
+    private double? _imageFitCenterY;
     private double _imageSourceRenderedWidth;
 
     private void InitializeImageReading(LongImageOptions options)
@@ -167,9 +168,10 @@ public partial class ImagePanel
         if (_imageFitMode == ImageFitMode.Manual && _imageSourceAnchor.HasValue)
             factor = _imageSourceRenderedWidth / source.Width;
 
-        ApplyImageFit(factor, _imageFitResetToTop, anchor, false);
+        ApplyImageFit(factor, _imageFitResetToTop, anchor, false, _imageFitCenterY);
         _imageFitResetToTop = false;
         _imageSourceAnchor = null;
+        _imageFitCenterY = null;
         _lastImageSourceSize = source;
     }
 
@@ -177,7 +179,29 @@ public partial class ImagePanel
 
     internal void FitWholeImage() => SelectImageFit(ImageFitMode.Whole);
 
-    private void SelectImageFit(ImageFitMode mode)
+    private bool ToggleImageReadingFit(Point imagePoint)
+    {
+        var source = GetImageSourceSize();
+        if (!_imageReadingActive || _imageReadingDisposed || !LongImageOptions.IsValidSize(source))
+            return false;
+
+        if (_imageFitMode == ImageFitMode.Whole)
+        {
+            // Image coordinates already exclude the overview's centered margins.
+            // Keep a relative position so a late full-resolution decode can still
+            // put the selected content in the middle of the reading viewport.
+            var centerY = Math.Max(0, Math.Min(1, imagePoint.Y / source.Height));
+            SelectImageFit(ImageFitMode.Width, centerY);
+        }
+        else
+        {
+            FitWholeImage();
+        }
+
+        return true;
+    }
+
+    private void SelectImageFit(ImageFitMode mode, double? centerY = null)
     {
         if (_longImageOptions == null || _imageReadingDisposed)
             return;
@@ -186,6 +210,8 @@ public partial class ImagePanel
         _imageReadingActive = true;
         _imageUserZoomed = false;
         _imageFitMode = mode;
+        _imageFitCenterY = centerY;
+        _imageSourceAnchor = null;
         if (mode == ImageFitMode.Width)
             ZoomWithControlKey = true;
         QueueImageFit(true);
@@ -196,6 +222,7 @@ public partial class ImagePanel
         _imageFitMode = ImageFitMode.Manual;
         _imageFitResetToTop = false;
         _imageSourceAnchor = null;
+        _imageFitCenterY = null;
         ApplyImageFit(factor, false, default, true);
         _lastImageSourceSize = GetImageSourceSize();
         if (!suppressEvent)
@@ -206,7 +233,8 @@ public partial class ImagePanel
         viewPanel.HorizontalOffset / (source.Width * ZoomFactor),
         viewPanel.VerticalOffset / (source.Height * ZoomFactor));
 
-    private void ApplyImageFit(double factor, bool resetToTop, Point anchor, bool useMouseAnchor)
+    private void ApplyImageFit(double factor, bool resetToTop, Point anchor, bool useMouseAnchor,
+        double? centerY = null)
     {
         var source = GetImageSourceSize();
         if (!LongImageOptions.IsValidSize(source) || _applyingImageFit)
@@ -255,7 +283,15 @@ public partial class ImagePanel
                 viewPanel.ScrollToVerticalOffset(0);
                 UpdateLayout();
 
-                if (!resetToTop)
+                if (centerY.HasValue)
+                {
+                    // Use the settled viewport, including any scrollbar. Near
+                    // either end, stop at the image edge instead of adding space.
+                    var offset = centerY.Value * source.Height * factor - viewPanel.ViewportHeight / 2;
+                    viewPanel.ScrollToVerticalOffset(Math.Max(0, Math.Min(viewPanel.ScrollableHeight, offset)));
+                    UpdateLayout();
+                }
+                else if (!resetToTop)
                 {
                     var offset = useMouseAnchor
                         ? viewPanelImage.TranslatePoint(mouseImagePoint, viewPanel) - mouseViewportPoint
