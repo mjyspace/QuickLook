@@ -55,6 +55,8 @@ public partial class ViewerWindow : Window
 
         InitializeComponent();
 
+        InitializeWindowPlacement();
+
         _autoReload = SettingHelper.Get("AutoReload", false);
 
         Icon = (App.IsWin10 ? Properties.Resources.app_white_png : Properties.Resources.app_png).ToBitmapSource();
@@ -174,6 +176,8 @@ public partial class ViewerWindow : Window
 
     public new void Close()
     {
+        SavePendingWindowPlacement();
+
         // Workaround to prevent DPI jump animation when closing window in .NET Framework 4.6.2
         // Safe to remove this line if QuickLook no longer targets .NET Framework 4.6.2
         Hide();
@@ -186,6 +190,8 @@ public partial class ViewerWindow : Window
         base.OnSourceInitialized(e);
 
         WindowHelper.RemoveWindowControls(this);
+
+        AttachWindowPlacementHook();
 
         ApplyWindowBackgroundEffects();
     }
@@ -442,6 +448,9 @@ public partial class ViewerWindow : Window
 
     private void SaveWindowSizeOnSizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (_placementChangeDepth != 0 || _isFullscreen)
+            return;
+
         // first shown?
         if (e.PreviousSize == new Size(0, 0))
             return;

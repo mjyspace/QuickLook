@@ -86,7 +86,7 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
         buttonBackgroundColour.Click += OnBackgroundColourOnClick;
 
         SizeChanged += ImagePanel_SizeChanged;
-        viewPanelImage.DoZoomToFit += (sender, e) => DoZoomToFit();
+        viewPanelImage.DoZoomToFit += (sender, e) => OnImageFitRequested();
         viewPanelImage.ImageLoaded += (sender, e) => ContextObject.IsBusy = false;
         viewPanelImage.AnimationFailed += (sender, e) =>
         {
@@ -111,7 +111,7 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
         viewPanel.ManipulationDelta += ViewPanel_ManipulationDelta;
     }
 
-    internal ImagePanel(ContextObject context, MetaProvider meta) : this()
+    internal ImagePanel(ContextObject context, MetaProvider meta, LongImageOptions longImageOptions) : this()
     {
         ContextObject = context;
         Meta = meta;
@@ -120,6 +120,7 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
 
         ShowMeta();
         Theme = ContextObject.Theme;
+        InitializeImageReading(longImageOptions);
     }
 
     public bool ZoomWithControlKey
@@ -319,6 +320,7 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
 
     public void Dispose()
     {
+        DisposeImageReading();
         viewPanelImage?.Dispose();
         viewPanelImage = null;
     }
@@ -423,6 +425,9 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
 
     private void ImagePanel_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (HandleImageReadingSizeChanged())
+            return;
+
         UpdateZoomToFitFactor();
 
         if (ZoomToFit)
@@ -530,6 +535,12 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
 
     public void DoZoomToFit()
     {
+        if (_imageReadingActive)
+        {
+            FitWholeImage();
+            return;
+        }
+
         UpdateZoomToFitFactor();
 
         Zoom(ZoomToFitFactor, false, true);
@@ -559,6 +570,19 @@ public partial class ImagePanel : UserControl, INotifyPropertyChanged, IDisposab
     {
         if (viewPanelImage?.Source == null)
             return;
+
+        if (!isToFit && _longImageOptions != null)
+        {
+            // A user action wins over a queued initial fit or a later decoder result.
+            _imageFitDecided = true;
+            _imageUserZoomed = true;
+        }
+
+        if (_imageReadingActive)
+        {
+            ZoomReadingImage(factor, suppressEvent);
+            return;
+        }
 
         // pause when fit width
         if (ZoomFactor < ZoomToFitFactor && factor > ZoomToFitFactor

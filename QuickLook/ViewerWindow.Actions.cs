@@ -69,6 +69,21 @@ public partial class ViewerWindow
 
     internal void ToggleFullscreen()
     {
+        _placementChangeDepth++;
+        try
+        {
+            ChangeFullscreenState();
+        }
+        finally
+        {
+            _placementChangeDepth--;
+        }
+
+        QueueUserWindowPlacementSave();
+    }
+
+    private void ChangeFullscreenState()
+    {
         if (_isFullscreen)
         {
             // Exit fullscreen
@@ -100,6 +115,8 @@ public partial class ViewerWindow
         }
         else
         {
+            _fullscreenRestorePlacement = CaptureWindowPlacement();
+
             // Enter fullscreen
             _isFullscreen = true;
 
@@ -157,15 +174,23 @@ public partial class ViewerWindow
 
     private void PositionWindow(Size size)
     {
-        // If the window is now maximized, do not move it
-        if (WindowState == WindowState.Maximized)
+        // A user-selected layout takes precedence over each plugin's preferred size.
+        if (WindowState == WindowState.Maximized || _isFullscreen || _hasUserWindowPlacement)
             return;
 
         size = new Size(Math.Max(MinWidth, size.Width), Math.Max(MinHeight, size.Height));
 
         var newRect = IsLoaded ? ResizeAndCentreExistingWindow(size) : ResizeAndCentreNewWindow(size);
 
-        this.MoveWindow(newRect.Left, newRect.Top, newRect.Width, newRect.Height);
+        _placementChangeDepth++;
+        try
+        {
+            this.MoveWindow(newRect.Left, newRect.Top, newRect.Width, newRect.Height);
+        }
+        finally
+        {
+            _placementChangeDepth--;
+        }
     }
 
     private Rect ResizeAndCentreExistingWindow(Size size)
@@ -278,6 +303,8 @@ public partial class ViewerWindow
         _path = path;
         Plugin = matchedPlugin;
 
+        RestoreWindowPlacementBeforePreview();
+
         ContextObject.Reset();
 
         // Assign monitor color profile
@@ -327,16 +354,14 @@ public partial class ViewerWindow
 
         if (!IsVisible)
         {
+            ShowWindowWithRestoredPlacement();
             Dispatcher.BeginInvoke(new Action(() =>
             {
+                CompleteWindowPlacementRestore();
                 this.BringToFront(Topmost);
                 if (SettingHelper.Get("FocusWindowOnOpen", false))
                     Activate();
             }), DispatcherPriority.Render);
-            if (!SettingHelper.Get("ShowWindowTransition", true, "QuickLook"))
-                this.ShowWithoutTransition();
-            else
-                Show();
         }
 
         if (_autoReload && File.Exists(path))
@@ -511,6 +536,8 @@ public partial class ViewerWindow
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        SavePendingWindowPlacement();
+        CompleteWindowPlacementRestore();
         UnloadPlugin();
         busyDecorator.Dispose();
 

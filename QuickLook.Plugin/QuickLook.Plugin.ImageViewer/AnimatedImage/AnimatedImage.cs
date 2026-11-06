@@ -51,6 +51,15 @@ public class AnimatedImage : Image, IDisposable
 
     public event EventHandler DoZoomToFit;
 
+    public event EventHandler ImageSourceChanged;
+
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.Property == SourceProperty)
+            ImageSourceChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private static AnimationProvider InitAnimationProvider(Uri path, MetaProvider meta, ContextObject contextObject)
     {
         var ext = Path.GetExtension(path.LocalPath).ToLower();

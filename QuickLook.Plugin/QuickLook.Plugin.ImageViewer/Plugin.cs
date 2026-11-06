@@ -60,6 +60,7 @@ public sealed partial class Plugin : IViewer, IMoreMenu
     private ImagePanel _ip;
     private string _currentPath;
     private MetaProvider _meta;
+    private LongImageOptions _longImageOptions;
 
     private IWebImagePanel _ipWeb;
     private IWebMetaProvider _metaWeb;
@@ -235,10 +236,19 @@ public sealed partial class Plugin : IViewer, IMoreMenu
             return;
 
         _meta = new MetaProvider(path);
+        _longImageOptions = LongImageOptions.Load();
 
         var size = _meta.GetSize();
 
-        if (!size.IsEmpty)
+        if (_longImageOptions.IsCandidate(size))
+        {
+            // Give a first-time long-image preview a useful viewport. A saved host
+            // placement takes precedence; the final mode uses the restored viewport.
+            var desktop = WindowHelper.GetCurrentDesktopSize();
+            context.PreferredSize = new Size(desktop.Width * _longImageOptions.WindowRatio,
+                desktop.Height * _longImageOptions.WindowRatio);
+        }
+        else if (!size.IsEmpty)
             context.SetPreferredSizeFit(size, 0.8d);
         else
             context.PreferredSize = new Size(800, 600);
@@ -253,7 +263,7 @@ public sealed partial class Plugin : IViewer, IMoreMenu
         if (WebHandler.TryView(path, context, _metaWeb, out _ipWeb))
             return;
 
-        _ip = new ImagePanel(context, _meta);
+        _ip = new ImagePanel(context, _meta, _longImageOptions);
         var size = _meta.GetSize();
 
         context.ViewerContent = _ip;

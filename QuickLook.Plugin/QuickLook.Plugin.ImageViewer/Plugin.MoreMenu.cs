@@ -32,6 +32,20 @@ public sealed partial class Plugin
         string translationFile = Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Translations.config");
         string extension = Path.GetExtension(_currentPath).ToLower();
 
+        if (_ip is not null)
+        {
+            yield return new MoreMenuItem()
+            {
+                Header = TranslationHelper.Get("IV_FitWidth", translationFile),
+                Command = new RelayCommand(() => _ip?.FitImageWidth()),
+            };
+            yield return new MoreMenuItem()
+            {
+                Header = TranslationHelper.Get("IV_FitWhole", translationFile),
+                Command = new RelayCommand(() => _ip?.FitWholeImage()),
+            };
+        }
+
         var reopen = extension switch
         {
             // SVG IMAGE <=> XML TEXT

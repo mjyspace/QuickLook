@@ -109,6 +109,15 @@ Example:
 - Example:
   - `<FocusWindowOnOpen>True</FocusWindowOnOpen>`
 
+### `<RememberWindowPlacement>`
+- Default: `True`
+- Type: `Boolean`
+- Description: Remember the main preview window's manually chosen monitor, position, size, and maximized or F11 fullscreen state. Restore the layout when reopening a preview, including after restarting QuickLook. The remembered layout takes precedence over a plugin's preferred window size. Opening a preview still follows `FocusWindowOnOpen`; restoring a layout does not enable focus on open.
+- If the saved monitor is unavailable, restore on an available monitor and keep the window within its visible bounds. Pinned previews do not replace the main preview's remembered layout.
+- Example:
+  - `<RememberWindowPlacement>False</RememberWindowPlacement>` to use the original automatic window placement.
+- `WindowPlacement` is an internal JSON value stored in the same config file. To reset the remembered layout, exit QuickLook and remove that XML element. Disabling the option does not erase an existing layout.
+
 ### `<ShowWindowTransition>`
 - Default: `True`
 - Type: `Boolean`
@@ -171,6 +180,36 @@ These keys are also stored in `QuickLook.config`.
   - `<ExtensionBlocklist>.insv;.exe</ExtensionBlocklist>`
 
 ## QuickLook.Plugin.ImageViewer.config options
+
+### `<LongImageMode>`
+- Default: `True`
+- Type: `Boolean`
+- Description: Automatically use width-fit reading mode for tall images handled by the native image panel. Both the aspect ratio and viewport ratio conditions below must be met. The decision uses the actual preview area after the window layout is restored.
+- Reading mode starts at the top. The mouse wheel scrolls vertically, Ctrl+wheel zooms, and dragging pans the image. Manual zoom is preserved when resizing the window; opening another image starts a new automatic decision. Ordinary images retain wheel-to-zoom behavior. PDF and thumbnail previews retain their existing behavior.
+- Use the image preview's More menu to switch between fitting the entire image and fitting its width. Web-rendered images such as the default SVG preview use their existing renderer.
+- Example:
+  - `<LongImageMode>False</LongImageMode>` to disable automatic long-image reading mode.
+
+### `<LongImageAspectRatio>`
+- Default: `2.5`
+- Type: `Double`
+- Description: Minimum image height divided by width for automatic reading mode. Must be a finite number greater than or equal to `1`.
+- Example:
+  - `<LongImageAspectRatio>3</LongImageAspectRatio>` for a more conservative threshold.
+
+### `<LongImageViewportRatio>`
+- Default: `1.5`
+- Type: `Double`
+- Description: Minimum height of the image when fitted to the preview width, divided by the preview area's height. Must be a finite number greater than or equal to `1`. This condition and `LongImageAspectRatio` are both required.
+- Example:
+  - `<LongImageViewportRatio>1.5</LongImageViewportRatio>`
+
+### `<LongImageWindowRatio>`
+- Default: `0.9`
+- Type: `Double`
+- Description: Fraction of the current monitor's working area used to suggest a starting window for candidate long images. Must be between `0.1` and `1`, inclusive. A remembered or manually adjusted window layout takes precedence.
+- Example:
+  - `<LongImageWindowRatio>0.9</LongImageWindowRatio>`
 
 ### `<UseColorProfile>`
 - Default: `False`

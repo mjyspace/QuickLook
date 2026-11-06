@@ -490,8 +490,8 @@ Step 5️⃣  🎉 Magic happens!
 
 | Key | Action |
 |-----|--------|
-| <kbd>Wheel</kbd> | Zoom (images) |
-| <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> | Zoom (PDFs) |
+| <kbd>Wheel</kbd> | Zoom ordinary images; scroll in long-image reading mode |
+| <kbd>Ctrl</kbd>+<kbd>Wheel</kbd> | Zoom PDFs and images in long-image reading mode |
 | <kbd>L-Click Drag</kbd> | Rotate 3D |
 | <kbd>M-Click Drag</kbd> | Pan 3D |
 
