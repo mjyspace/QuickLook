@@ -211,7 +211,8 @@ function Test-PackageFile([string]$RelativePath) {
 
 function Invoke-ReleaseMSBuild([string]$Target, [string]$LogName) {
     $arguments = @($solutionPath, '/nologo', "/m:$MaxCpuCount", '/verbosity:minimal', "/t:$Target",
-        '/p:Configuration=Release', '/p:Platform=Any CPU', "/p:SolutionDir=$($repoRoot.Replace('\', '/'))/",
+        '/p:Configuration=Release', '/p:Platform=Any CPU', '/p:FodyGenerateXsd=false',
+        "/p:SolutionDir=$($repoRoot.Replace('\', '/'))/",
         "/p:DirectoryBuildTargetsPath=$targetsPath", "/p:QuickLookSdkRoot=$($tools.SdkRoot)",
         "/p:QuickLookSdkVersion=$($tools.Sdk.Version)", "/p:WindowsTargetPlatformVersion=$($tools.Sdk.Version)",
         "/p:QuickLookFoundationContractVersion=$($tools.Sdk.Foundation)",
