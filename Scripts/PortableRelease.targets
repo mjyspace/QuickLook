@@ -1,0 +1,25 @@
+<Project>
+  <!-- The portable build discovers an installed SDK and supplies its versions.
+       The regular solution and CI continue to use their configured SDK. -->
+  <Target Name="UsePortableBuildWindowsSdk" BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(QuickLookSdkRoot)' != '' And ('$(MSBuildProjectName)' == 'QuickLook' Or $(MSBuildProjectName.StartsWith('QuickLook_')))">
+    <ItemGroup>
+      <Reference Remove="windows;Windows.Foundation.FoundationContract;Windows.Foundation.UniversalApiContract" />
+      <Reference Include="windows">
+        <HintPath>$(QuickLookSdkRoot)\UnionMetadata\$(QuickLookSdkVersion)\Facade\windows.winmd</HintPath>
+      </Reference>
+      <Reference Include="Windows.Foundation.FoundationContract">
+        <HintPath>$(QuickLookSdkRoot)\References\$(QuickLookSdkVersion)\Windows.Foundation.FoundationContract\$(QuickLookFoundationContractVersion)\Windows.Foundation.FoundationContract.winmd</HintPath>
+      </Reference>
+      <Reference Include="Windows.Foundation.UniversalApiContract">
+        <HintPath>$(QuickLookSdkRoot)\References\$(QuickLookSdkVersion)\Windows.Foundation.UniversalApiContract\$(QuickLookUniversalApiContractVersion)\Windows.Foundation.UniversalApiContract.winmd</HintPath>
+      </Reference>
+    </ItemGroup>
+  </Target>
+  <!-- Preserve the Common assembly before the host's Costura packaging removes
+       copy-local dependencies from the output directory. Plugins also use it. -->
+  <Target Name="PreservePortableCommonAssembly" AfterTargets="Build"
+          Condition="'$(MSBuildProjectName)' == 'QuickLook.Common' And '$(QuickLookPortableCommonPath)' != ''">
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(QuickLookPortableCommonPath)" />
+  </Target>
+</Project>
