@@ -260,6 +260,14 @@ These keys are also stored in `QuickLook.config`.
 - Example:
   - `<VolumeDouble>0.75</VolumeDouble>`
 
+### `<LoudnessReferenceLufs>`
+
+Open the volume control while previewing a representative music or video file, adjust Windows volume to taste, and choose **Use this file as the loudness reference**. Once the entire selected audio track has been measured, future previews use that reference, including after a restart. Choose another reference or **Turn off loudness matching** in the same menu. The default is off (empty value).
+
+Analysis uses `ffmpeg.exe` from Windows `Path` and requires the `ebur128` filter with true-peak support. Restart QuickLook after changing `Path`. For an uncached track, playback targets a three-second analysis budget. Long files can start using excerpts from different parts of the track. The gain stays fixed during playback while a background scan saves the complete result for subsequent previews. If analysis is unavailable, the file plays at its original gain.
+
+QuickLook applies the gain to decoded audio before the normal volume slider. Boost is limited to 10 dB and leaves 1 dB of headroom above the measured true peak. Windows volume and source files remain under your control. MIDI playback and encoded audio passthrough do not use PCM gain. Full measurements are cached by file path and audio track under `LoudnessCache` in QuickLook's user data directory. Changing the file size or modification time invalidates its measurement.
+
 ### `<UseHardwareAcceleration>`
 - Default: `False`
 - Type: `Boolean`

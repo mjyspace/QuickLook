@@ -30,7 +30,6 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -91,13 +90,23 @@ public partial class ViewerPanel : UserControl, IDisposable, INotifyPropertyChan
         buttonHardwareAcceleration.ToolTip = TranslationHelper.Get("BTN_HardwareAcceleration", translationFile, failsafe: "Hardware/Software Decoding");
         buttonMute.ToolTip = TranslationHelper.Get("BTN_Volume", translationFile, failsafe: "Volume");
         buttonTime.ToolTip = TranslationHelper.Get("BTN_Time", translationFile, failsafe: "Time Elapsed/Remaining");
+        InitializeLoudnessControls(translationFile);
 
         buttonPlayPause.Click += TogglePlayPause;
         buttonLoop.Click += ToggleShouldLoop;
         buttonHardwareAcceleration.Click += ToggleHardwareAcceleration;
         buttonTime.Click += (_, _) => buttonTime.Tag = (string)buttonTime.Tag == "Time" ? "Length" : "Time";
-        buttonMute.Click += (_, _) => volumeSliderLayer.Visibility = Visibility.Visible;
-        volumeSliderLayer.MouseDown += (_, _) => volumeSliderLayer.Visibility = Visibility.Collapsed;
+        buttonMute.Click += (_, _) =>
+        {
+            UpdateDisableLoudnessButton();
+            volumeSliderLayer.Visibility = Visibility.Visible;
+        };
+        volumeSliderLayer.MouseDown += (_, e) =>
+        {
+            if (e.OriginalSource == volumeSliderLayer)
+                volumeSliderLayer.Visibility = Visibility.Collapsed;
+            e.Handled = true;
+        };
 
         sliderProgress.PreviewMouseDown += (_, e) =>
         {
@@ -172,6 +181,10 @@ public partial class ViewerPanel : UserControl, IDisposable, INotifyPropertyChan
 
     public void Dispose()
     {
+        if (_previewLifetime.IsCancellationRequested) return;
+        _previewLifetime.Cancel();
+        mediaElement.MediaUriPlayer.MediaOpened -= PrepareGraphLoudness;
+
         // old plugin use an int-typed "Volume" config key ranged from 0 to 100. Let's use a new one here.
         SettingHelper.Set("VolumeDouble", LinearVolume, "QuickLook.Plugin.VideoViewer");
         SettingHelper.Set("ShouldLoop", ShouldLoop, "QuickLook.Plugin.VideoViewer");
@@ -179,13 +192,9 @@ public partial class ViewerPanel : UserControl, IDisposable, INotifyPropertyChan
 
         try
         {
-            mediaElement?.Close();
-
-            Task.Run(() =>
-            {
-                mediaElement?.MediaUriPlayer.Dispose();
-                mediaElement = null;
-            });
+            var player = mediaElement.MediaUriPlayer;
+            mediaElement.Close();
+            player.Dispatcher.BeginInvoke(new Action(player.Dispose));
         }
         catch (Exception e)
         {
@@ -216,18 +225,19 @@ public partial class ViewerPanel : UserControl, IDisposable, INotifyPropertyChan
 
     private void MediaOpened(object o, RoutedEventArgs args)
     {
-        if (mediaElement == null)
+        if (_previewLifetime.IsCancellationRequested)
             return;
 
         HasVideo = mediaElement.HasVideo;
 
-        _context.IsBusy = false;
+        _context.IsBusy = _waitingForLoudness;
     }
 
     private void MediaFailed(object sender, MediaFailedEventArgs e)
     {
         ((MediaUriElement)sender).Dispatcher.BeginInvoke(new Action(() =>
         {
+            if (_previewLifetime.IsCancellationRequested) return;
             _context.ViewerContent = new TextBlock()
             {
                 Text = e.Exception.ToString(),
@@ -240,7 +250,7 @@ public partial class ViewerPanel : UserControl, IDisposable, INotifyPropertyChan
 
     private void MediaEnded(object sender, RoutedEventArgs e)
     {
-        if (mediaElement == null)
+        if (_previewLifetime.IsCancellationRequested)
             return;
 
         mediaElement.MediaPosition = 0L;
@@ -481,11 +491,12 @@ public partial class ViewerPanel : UserControl, IDisposable, INotifyPropertyChan
         if (Math.Abs(rotation) > 0.1d)
             mediaElement.LayoutTransform = new RotateTransform(rotation, 0.5d, 0.5d);
 
+        PrepareLoudness(path, info);
         mediaElement.Source = new Uri(path);
         // old plugin use an int-typed "Volume" config key ranged from 0 to 100. Let's use a new one here.
         LinearVolume = Math.Max(0d, Math.Min(1d, SettingHelper.Get("VolumeDouble", 1d, "QuickLook.Plugin.VideoViewer")));
 
-        mediaElement.Play();
+        if (!_waitingForLoudness) mediaElement.Play();
     }
 
     [NotifyPropertyChangedInvocator]
