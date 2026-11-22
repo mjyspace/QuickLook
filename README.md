@@ -296,6 +296,20 @@ OneDrive, Dropbox ready
 
 ## 📦 Get Started
 
+### Windows installer for the mjyspace fork
+
+Run the `QuickLook-mjyspace-…-win-x64.msi` from `Build/Releases` to install for the current user. Start **QuickLook (mjyspace)** from the desktop or Start menu. For an upgrade, exit the running QuickLook from the tray and open the newer MSI. The shortcuts continue to point to `%LOCALAPPDATA%\Programs\QuickLook-mjyspace\QuickLook.exe`. QuickLook runs one copy per Windows session, so exit a running portable or Store copy before starting the installed copy.
+
+The installed application keeps its settings and loudness cache in `%APPDATA%\pooi.moe\QuickLook`. Upgrades preserve them. The installer leaves existing portable `UserData` in place. FFmpeg is picked up from your Windows `Path`.
+
+To build the MSI and portable ZIP together from the repository root:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\Scripts\build-release.ps1 -WithInstaller
+```
+
+The build restores a SHA-256-verified WiX 3.14.1 toolset locally when needed. Both packages have a checksum in `Build/Releases`. The MSI version starts at the number in `QuickLook.Installer/ForkVersion.txt` and increments its third field for each subsequent first-parent commit. To start a new series, commit a higher base such as `0.2.0`. Rebuilding the same commit keeps the same install version. The filename and `build-info.json` identify the source commit.
+
 <div align="center">
 
 ### Choose Your Adventure

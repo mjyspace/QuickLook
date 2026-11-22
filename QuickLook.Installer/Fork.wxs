@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="$(var.ProductCode)" Name="QuickLook (mjyspace)" Language="2052" Codepage="936"
+           Manufacturer="mjyspace" Version="$(var.ProductVersion)"
+           UpgradeCode="9B9A2879-8C4C-4934-A21B-865F3CA45C0A">
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" />
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="已安装更高版本的 [ProductName]。" />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="medium" />
+    <Property Id="QUICKLOOKGITCOMMIT" Value="$(var.SourceCommit)" />
+    <Icon Id="QuickLookIcon.exe" SourceFile="$(var.InstallerSource)\..\QuickLook\Resources\app.ico" />
+    <Property Id="ARPPRODUCTICON" Value="QuickLookIcon.exe" />
+    <WixVariable Id="WixUILicenseRtf" Value="$(var.InstallerSource)\gpl.rtf" />
+    <UIRef Id="WixUI_Minimal" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="ForkProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="QuickLook-mjyspace" />
+        </Directory>
+      </Directory>
+      <Directory Id="DesktopFolder" />
+      <Directory Id="ProgramMenuFolder" />
+    </Directory>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="ForkShortcuts" Guid="7DE2D4FB-9B6E-43E9-B265-B6CB7410DF57">
+        <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="QuickLook (mjyspace)"
+                  Target="[INSTALLFOLDER]QuickLook.exe" WorkingDirectory="INSTALLFOLDER" Icon="QuickLookIcon.exe" />
+        <Shortcut Id="StartMenuShortcut" Directory="ProgramMenuFolder" Name="QuickLook (mjyspace)"
+                  Target="[INSTALLFOLDER]QuickLook.exe" WorkingDirectory="INSTALLFOLDER" Icon="QuickLookIcon.exe" />
+        <RemoveFolder Id="RemoveInstallFolder" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\mjyspace\QuickLook\Installer"
+                       Name="Shortcuts" Value="1" Type="integer" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <Feature Id="QuickLookFeature" Title="QuickLook (mjyspace)" Level="1">
+      <ComponentRef Id="ForkShortcuts" />
+      <ComponentGroupRef Id="ForkFiles" />
+    </Feature>
+  </Product>
+</Wix>

@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-Builds and verifies a complete local Windows x64 portable Release ZIP.
+Builds and verifies a Windows x64 portable Release ZIP and an optional per-user MSI.
 .DESCRIPTION
 Builds the host, every managed project in QuickLook.slnx, and the Win32/x64
-native helpers. MSI, APPX, ARM64, publishing and installation are not involved.
+native helpers. Use -WithInstaller to also package the same files as a fork MSI.
 Only Build/Release and this script's staging directory are cleared. Previous
 archives remain in Build/Releases. Run -PreflightOnly to check prerequisites
 without building or deleting files.
@@ -13,6 +13,8 @@ param(
     [string]$MSBuildPath,
     [string]$WindowsSdkVersion,
     [ValidateRange(1, 64)][int]$MaxCpuCount = 4,
+    [switch]$WithInstaller,
+    [string]$WixBin,
     [switch]$SkipRestore,
     [switch]$PreflightOnly
 )
@@ -209,6 +211,27 @@ function Test-PackageFile([string]$RelativePath) {
     return $true
 }
 
+function Get-ForkInstallerVersion {
+    $versionFile = 'QuickLook.Installer/ForkVersion.txt'
+    $base = [version](Get-Content -LiteralPath (Join-Path $repoRoot $versionFile) -Raw).Trim()
+    if ($base.Build -lt 0 -or $base.Revision -ne -1) { throw 'ForkVersion.txt must contain major.minor.build.' }
+    # Count releases along the first-parent line, starting at zero when the base changes.
+    # The same checkout produces the same number on every build machine.
+    $anchor = & git -C $repoRoot log -1 --first-parent --format=%H -- $versionFile
+    if ($LASTEXITCODE -ne 0 -or !$anchor) { throw "Cannot find the version baseline in Git: $versionFile" }
+    $shallow = & git -C $repoRoot rev-parse --git-path shallow
+    if ((Test-Path -LiteralPath $shallow) -and ((Get-Content -LiteralPath $shallow) -contains $anchor)) {
+        throw 'Fetch history through the last change of ForkVersion.txt to calculate the MSI version.'
+    }
+    $distance = & git -C $repoRoot rev-list --first-parent --count "${anchor}..HEAD"
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot calculate the MSI build number.' }
+    $build = $base.Build + [int]$distance
+    if ($base.Major -gt 255 -or $base.Minor -gt 255 -or $build -gt 65535) {
+        throw 'MSI version exceeds the Windows Installer range. Advance the base version in ForkVersion.txt.'
+    }
+    return "$($base.Major).$($base.Minor).$build"
+}
+
 function Invoke-ReleaseMSBuild([string]$Target, [string]$LogName) {
     $arguments = @($solutionPath, '/nologo', "/m:$MaxCpuCount", '/verbosity:minimal', "/t:$Target",
         '/p:Configuration=Release', '/p:Platform=Any CPU', '/p:FodyGenerateXsd=false',
@@ -223,6 +246,7 @@ function Invoke-ReleaseMSBuild([string]$Target, [string]$LogName) {
     if ($LASTEXITCODE -ne 0) { throw "MSBuild $Target failed with exit code $LASTEXITCODE. See $(Join-Path $workRoot $LogName)." }
 }
 
+$buildLock = $null
 Push-Location -LiteralPath $repoRoot
 try {
     $null = Assert-WorkspacePath $releaseRoot
@@ -238,6 +262,10 @@ try {
     $version = & $versionScript
     if (!$version -or !$version.PackageVersion -or !$version.Commit) { throw 'Get-BuildVersion.ps1 returned incomplete version information.' }
     if ($version.PackageVersion -match '[^A-Za-z0-9._+-]') { throw 'PackageVersion contains unsafe filename characters.' }
+    if ($WithInstaller) {
+        $installerVersion = Get-ForkInstallerVersion
+        Write-Host "QuickLook (mjyspace) MSI: $installerVersion"
+    }
     Write-Host "Portable Release: $($version.PackageVersion), win-x64, $($portable.Plugins.Count) plugins"
     Write-Host "MSBuild: $($tools.MSBuild)"
     Write-Host "Windows SDK: $($tools.Sdk.Version); MSVC: $($tools.ToolsetVersion)"
@@ -246,8 +274,14 @@ try {
         return
     }
 
+    if ($WithInstaller) {
+        $wixDirectory = & (Join-Path $PSScriptRoot 'Resolve-Wix3.ps1') -WixBin $WixBin
+    }
     Assert-NoReparseTree $workRoot
     $null = New-Item -ItemType Directory -Path $workRoot -Force
+    $lockPath = Assert-WorkspacePath (Join-Path $workRoot 'build.lock')
+    try { $buildLock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
+    catch [IO.IOException] { throw "Cannot lock the release staging area. Another build may be running: $lockPath" }
     $solutionPath = Join-Path $workRoot 'portable.slnx'
     $commonSnapshotPath = Join-Path $workRoot ([Guid]::NewGuid().ToString('N') + '-QuickLook.Common.dll')
     $portable.Document.Save($solutionPath)
@@ -294,6 +328,7 @@ try {
         builtAtUtc = [DateTime]::UtcNow.ToString('o')
         plugins = @($portable.Plugins)
     }
+    if ($WithInstaller) { $buildInfo['installerVersion'] = $installerVersion }
     [IO.File]::WriteAllText((Join-Path $stagingRoot 'build-info.json'), ($buildInfo | ConvertTo-Json -Depth 5), $utf8)
 
     $requiredFiles = @('QuickLook.exe', 'QuickLook.exe.config', 'QuickLook.Common.dll', 'QuickLook.Native32.dll', 'QuickLook.Native64.dll',
@@ -344,11 +379,35 @@ try {
     Write-Host "Verified portable release: $archivePath"
     Write-Host "SHA256: $checksum"
     [pscustomobject]@{ Archive = $archivePath; ChecksumFile = "$archivePath.sha256"; SHA256 = $checksum; PluginCount = $portable.Plugins.Count }
+
+    if ($WithInstaller) {
+        $installerRoot = Assert-WorkspacePath (Join-Path $workRoot ('msi-' + [Guid]::NewGuid().ToString('N')))
+        $candidate = Join-Path $installerRoot 'QuickLook.msi'
+        & (Join-Path $PSScriptRoot 'New-ForkInstaller.ps1') -StagingRoot $stagingRoot -Version $installerVersion `
+            -Commit $version.Commit -WorkDirectory $installerRoot -OutputPath $candidate -WixBin $wixDirectory
+        & (Join-Path $PSScriptRoot 'Test-ForkInstaller.ps1') -Msi $candidate -StagingRoot $stagingRoot `
+            -Version $installerVersion -Commit $version.Commit
+
+        $suffix = if ($version.IsDirty) { '-dirty' } else { '' }
+        $msiName = "QuickLook-mjyspace-$installerVersion-$($version.Commit.Substring(0,12))$suffix-win-x64"
+        $installerPath = Join-Path $archivesRoot "$msiName.msi"
+        if ((Test-Path -LiteralPath $installerPath) -or (Test-Path -LiteralPath "$installerPath.sha256")) {
+            $installerPath = Join-Path $archivesRoot ("$msiName-" + [Guid]::NewGuid().ToString('N') + '.msi')
+        }
+        $hash = (Get-FileHash -LiteralPath $candidate -Algorithm SHA256).Hash.ToLowerInvariant()
+        Move-Item -LiteralPath $candidate -Destination $installerPath
+        [IO.File]::WriteAllText("$installerPath.sha256", "$hash  $([IO.Path]::GetFileName($installerPath))`r`n", $utf8)
+        Assert-NoReparseTree $installerRoot
+        Remove-Item -LiteralPath $installerRoot -Recurse -Force
+        Write-Host "Verified per-user installer: $installerPath"
+        [pscustomobject]@{ Installer = $installerPath; ChecksumFile = "$installerPath.sha256"; SHA256 = $hash; Version = $installerVersion }
+    }
 }
 catch {
     Write-Error -Message $_.Exception.Message -ErrorAction Continue
     exit 1
 }
 finally {
+    if ($buildLock) { $buildLock.Dispose() }
     Pop-Location
 }
